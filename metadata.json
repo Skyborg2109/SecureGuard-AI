@@ -1,0 +1,5 @@
+{
+  "name": "SecureGuard AI: Otomasi Data Sensitif",
+  "description": "Alat deteksi dan enkripsi data sensitif berbasis AI menggunakan AES-128 (CBC/GCM) untuk file PDF, DOCX, dan XLSX.",
+  "requestFramePermissions": []
+}
