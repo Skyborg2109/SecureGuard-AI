@@ -21,6 +21,49 @@ import { extractTextFromFile } from './lib/fileProcessor';
 import { detectSensitiveInformation, type SensitiveEntity } from './services/geminiService';
 import { generateKey, encryptCBC, encryptGCM } from './lib/crypto';
 import { generateSamplePDF, generateSampleDOCX, generateSampleXLSX } from './lib/sampleGenerator';
+import { 
+  exportSensitiveToPDF, exportSensitiveToDOCX, exportSensitiveToXLSX
+} from './lib/exportProcessor';
+
+const ExportMenu = ({ onExport, label = "Unduh" }: { onExport: (type: 'pdf' | 'docx' | 'xlsx') => void, label?: string }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  
+  return (
+    <div className="relative">
+      <button 
+        onClick={() => setIsOpen(!isOpen)}
+        onBlur={() => setTimeout(() => setIsOpen(false), 200)}
+        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition-colors border border-slate-700 shadow-sm"
+      >
+        <Download className="w-3.5 h-3.5" />
+        {label}
+      </button>
+      
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95, y: 5 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 5 }}
+            transition={{ duration: 0.15 }}
+            className="absolute right-0 top-full mt-1.5 p-1 w-36 bg-slate-900 border border-slate-700 rounded-xl shadow-xl z-20"
+          >
+            <button onMouseDown={() => onExport('pdf')} className="w-full flex items-center gap-2 px-3 py-2 text-xs text-slate-300 hover:bg-slate-800 hover:text-white rounded-lg transition-colors">
+              <span className="text-red-400">📄</span> PDF File
+            </button>
+            <button onMouseDown={() => onExport('docx')} className="w-full flex items-center gap-2 px-3 py-2 text-xs text-slate-300 hover:bg-slate-800 hover:text-white rounded-lg transition-colors">
+              <span className="text-blue-400">📝</span> Word (DOCX)
+            </button>
+            <button onMouseDown={() => onExport('xlsx')} className="w-full flex items-center gap-2 px-3 py-2 text-xs text-slate-300 hover:bg-slate-800 hover:text-white rounded-lg transition-colors">
+              <span className="text-emerald-400">📊</span> Excel (XLSX)
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
+
 
 interface ProcessedData {
   originalText: string;
@@ -102,6 +145,19 @@ export default function App() {
     if (type === 'pdf') generateSamplePDF();
     else if (type === 'docx') generateSampleDOCX();
     else if (type === 'xlsx') generateSampleXLSX();
+  };
+
+
+  const downloadSensitiveResult = async (type: 'pdf' | 'docx' | 'xlsx') => {
+    if (!result || result.sensitiveEncryptions.length === 0) return;
+    try {
+      if (type === 'pdf') await exportSensitiveToPDF(result.sensitiveEncryptions);
+      else if (type === 'docx') await exportSensitiveToDOCX(result.sensitiveEncryptions);
+      else if (type === 'xlsx') await exportSensitiveToXLSX(result.sensitiveEncryptions);
+    } catch(err: any) {
+      setError(err.message || "Gagal mendownload hasil enkripsi sensitif.");
+      console.error(err);
+    }
   };
 
   return (
@@ -282,10 +338,17 @@ export default function App() {
                     </div>
                     <div className="bg-slate-900/50 border border-slate-800 p-4 rounded-2xl">
                       <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Status</p>
-                      <div className="flex items-center gap-2 text-emerald-400">
-                        <CheckCircle2 className="w-5 h-5" />
-                        <span className="font-bold">Terlindungi</span>
-                      </div>
+                      {result.sensitiveEntities.length > 0 ? (
+                        <div className="flex items-center gap-2 text-red-500">
+                          <AlertTriangle className="w-5 h-5" />
+                          <span className="font-bold">Tidak Aman</span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2 text-emerald-400">
+                          <CheckCircle2 className="w-5 h-5" />
+                          <span className="font-bold">Terlindungi</span>
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -295,6 +358,11 @@ export default function App() {
                         <AlertTriangle className="w-5 h-5 text-purple-400" />
                         Entitas Sensitif (GCM)
                       </h3>
+                      {result.sensitiveEncryptions.length > 0 && (
+                        <div className="flex items-center gap-2">
+                          <ExportMenu onExport={downloadSensitiveResult} label="Unduh Laporan" />
+                        </div>
+                      )}
                     </div>
                     <div className="divide-y divide-slate-800 max-h-[300px] overflow-y-auto">
                       {result.sensitiveEncryptions.length > 0 ? (
@@ -336,12 +404,15 @@ export default function App() {
                         <FileText className="w-5 h-5 text-blue-400" />
                         Konten Umum (CBC)
                       </h3>
-                      <button 
-                        onClick={() => setShowOriginal(!showOriginal)}
-                        className="p-2 hover:bg-slate-800 rounded-lg transition-colors text-slate-400"
-                      >
-                        {showOriginal ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button 
+                          onClick={() => setShowOriginal(!showOriginal)}
+                          className="p-2 hover:bg-slate-800 rounded-lg transition-colors text-slate-400"
+                          title={showOriginal ? "Sembunyikan Teks Asli" : "Tampilkan Teks Asli"}
+                        >
+                          {showOriginal ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                        </button>
+                      </div>
                     </div>
                     <div className="p-6">
                       <div className="bg-slate-950 border border-slate-800 rounded-2xl p-4 max-h-[400px] overflow-y-auto font-mono text-sm leading-relaxed">
